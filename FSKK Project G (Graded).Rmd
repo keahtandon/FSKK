@@ -1,0 +1,452 @@
+---
+title: "Project G: Collaborating on Projects"
+author: "FSKK: Fang Wang, Shea Ferguson, Kelley Lewis, Keah Tandon"
+date: "`r format(Sys.Date(), '%B %d, %Y')`"
+output:
+  html_document:
+    df_print: paged
+---
+
+*This project will require you to collaborate with some of your fellow students to complete a statistical analysis and report. Here are some of the tasks that you must accomplish.*
+
+* Create a public GitHub repository with an RStudio project file (team leader)
+
+* Put a description of the project in the README.md file (team leader)
+
+* Email team members and Mike the repository address (team leader)
+
+* Write a short introduction
+
+* Provide a graphical display and descriptive statistics to compare groups
+
+* Conduct an analysis of variance (ANOVA) for omnibus inference
+
+* Check the conditions necessary for valid ANOVA inference
+
+* Conduct a bootstrap for omnibus inference without needing conditions
+
+* Construct Tukey pairwise confidence intervals (if appropriate)
+
+* Write a conclusions section
+
+* Assemble a complete knittable report (team leader)
+
+*If you write any functions, put these in a **Functions** folder. Put data in a **Data** folder. These should be subfolders in your main project folder. Your finished notebook should be neat and organized. Save this notebook with your team name and **Project G** in the file name, rather than the report title. Leave the instructions in place and begin your report after the last horizontal line below. All team members will receive the same score for this project. (40 points possible)*
+
+***
+
+The *HSB2 Data* includes variables collected on a random sample of high school seniors. Conduct an analysis to compare performance on the test variable assigned to your team for the three socioeconomic groups. Include a graphical display and descriptive statistics. Also include an omnibus analysis that assumes valid conditions for parametric inference (ANOVA) as well as an omnibus analysis that does not assume these conditions (bootstrap). Construct pairwise Tukey confidence intervals, if appropriate.
+
+***
+
+<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Montserrat">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Domine">
+
+```{r setup, include=FALSE}
+
+rm(list = ls())
+
+library(here)
+library(showtext)
+library(shiny)
+library(ggplot2)
+library(dplyr)
+library(kableExtra)
+library(GGally)
+library(DiagrammeR)
+library(tidyverse)
+library(boot)
+
+source(here("StudentFunctions","Tukey HSD in GG plot.R"))
+source(here("StudentFunctions","Theme Downcute.R"))
+source(here("StudentFunctions","Corr Fun.R"))
+
+font_add_google(name = "Domine", family = "domine") 
+font_add_google(name = "Montserrat", family = "Montserrat")
+showtext_auto()
+
+hsb2 <- read.csv(here("Data", "hsb2.csv"), header = TRUE, sep = ",")
+
+low_SES <- subset(hsb2, hsb2$ses == "1")
+med_SES <- subset(hsb2, hsb2$ses == "2")
+high_SES <- subset(hsb2, hsb2$ses == "3")
+
+# Setting the seed for reproducability of results for bootstrap
+set.seed(42)
+ 
+# Calling the boot function with the dataset our function and no. of rounds
+bootstrap <- boot(hsb2, corr.fun, R = 10000)
+
+hsb2$ses <- factor(hsb2$ses,
+                         labels = c("Low",
+                                    "Medium",
+                                    "High"))
+
+n_by_group <- count(hsb2, ses)
+
+# Color scheme
+  #8540A0
+  #5462B6
+  #7fffd4
+  #FFC0CB
+  #c3f3c0
+
+
+
+```
+
+``` {css echo=FALSE}
+
+<head>
+
+<style>
+
+body {
+
+  font-family: "Montserrat", sans; 
+  font-size: 14px; 
+
+}
+
+.list-group-item.active, .list-group-item.active:focus, .list-group-item.active:hover {
+    z-index: 2;
+    color: #fff;
+    background-color: #8aaa79;
+    border-color: #8aaa79;
+}
+
+.list-group, .list-group-item {
+
+    color: #0081a7;
+    background-color: #FEFCFB;
+
+}
+
+p {
+
+  font-family: "Montserrat", sans; 
+  font-size: 14px; 
+  color: "black";
+
+}
+
+h1 {
+
+  font-family: "Domine", serif; 
+  font-size: 22px; 
+  color: #8540A0;
+
+}
+
+h2 {
+
+  font-family: "Domine", serif; 
+  font-size: 18px; 
+  color: #E9BA20; 
+  line-height: .5em; 
+
+}
+
+h3 {
+  
+  font-family: "Domine", serif; 
+  font-size: 15px; 
+  color: #8540A0; 
+  font-weight: "bold"; 
+
+}
+
+h4 {
+  
+  font-family: "Montserrat", sans; 
+  font-size: 18px; 
+  color: 'black'; 
+  line-height: 2em;
+  
+}
+
+table {
+
+  font-family: "Montserrat", sans; 
+  font-size: 14px; 
+  color: 'black';
+
+}
+
+</style>
+</head>
+
+```
+
+## Introduction
+We wanted to examine what differences may exist in reading scores by socioeconomic status (SES). In this study, we used data from the National Center of Education Statistics (NCES). NCES randomly sampled schools, and collected data for high school seniors (n=200). Demographic variables were collected along with reading test scores for both public and private school students. SES is categorized into three groups: low, medium, and high. The following report will address the following question: do reading test scores differ by SES status? Our hypothesis is that there will be differences in reading scores by SES and that reading scores will be highest for the high SES group. 
+
+\
+
+## Analysis
+Table 1 shows summary statistics for overall reading scores for all students in the sample. The mean score was 52.23 (SD = `r round(sd(hsb2$read),2)`).
+\
+
+### Table 1: Overall reading scores
+
+```{r descriptives, echo=FALSE}
+# sd(hsb2$read)
+
+overall_summary <- as.data.frame.list(summary(hsb2$read))
+overall_summary <- overall_summary[,c(1,2,3,5,6,4)]
+overall_summary$SD <- sd(hsb2$read)
+
+
+overall_summary %>%
+  kable(longtable = T,
+        digits = 2,
+        col.names = c("Min",
+          "Q1",
+          "Median",
+          "Q3",
+          "Max",
+          "Mean",
+          "SD")) %>%
+    kable_styling(full_width = T) %>%
+  row_spec(0, color = "white", background = "#5462B6")  %>%
+    row_spec(1, color = "black")
+```
+
+After looking at the overall scores, we wanted to look at reading scores by SES. Therefore, groups were created to represent low SES, medium SES, and high SES. Figure 1 shows the breakdown of reading scores by SES. Scores were similar among low and medium SES, but higher for the high SES group. 
+
+### Figure 1: Boxplots of reading scores for three SES groups
+
+``` {r boxplots, fig.height = 6.4, fig.width= 9, echo = FALSE}
+par(mar = c(5.1,4.1,1,2.1), cex=2)
+
+boxplot(hsb2$read ~ hsb2$ses,
+        ylab = "Reading Scores",
+        xlab = "SES",
+        names = c("Low", "Medium", "High"),
+        col = c("aquamarine", "pink", "#5462B6"))
+
+```
+
+
+Table 2 shows the summary statistics for reading scores by SES. The mean reading score for low SES (n = `r n_by_group[1,2]`) was 48.28 (SD = 9.34). The mean reading score for medium SES (n = `r n_by_group[2,2]`) was 51.58 (SD = 9.43). Lastly, the mean reading score for high SES (n = `r n_by_group[3,2]`) was 56.5 (SD = 10.86). These results show that high SES group had the greatest mean, but also the greatest SD among the three groups. Additionally, the minimum and maximum score was highest for the high SES group and lowest for the low SES group. 
+
+### Table 2: SES group five-number summaries, means, and standard deviations for reading scores
+```{r echo=FALSE}
+tidy_read <- hsb2 %>%
+  group_by(ses) %>%
+  summarize(
+    Min=min(read),
+    Q1=quantile(read, probs = 0.25),
+    Median=median(read),
+    Q3=quantile(read, probs = .75),
+    Max=max(read),
+    Mean=mean(read),
+    SD=sd(read))
+
+  tidy_read %>%
+  kable(longtable = T,
+        digits=2,
+        col.names = c("SES",
+                      "Min",
+                      "Q1",
+                      "Median",
+                      "Q3",
+                      "Max",
+                      "Mean",
+                      "SD")) %>%
+    kable_styling(full_width = T) %>%
+  row_spec(0, color = "white", background = "#5462B6")%>%
+    row_spec(1:nrow(tidy_read), color = "black")
+```
+
+\
+
+Figure 2 contains the normal Q-Q plot. The residuals roughly follow a straight line indicating the data is normally distributed.
+
+### Figure 2: Normal Q-Q plot for residuals in the study
+
+``` {r QQ, fig.height = 6.4, fig.width= 9, echo = FALSE}
+
+par(mar = c(5.1, 4.1, 1, 2.1), cex=2)
+
+# get the model 
+model <- lm(hsb2$read ~ hsb2$ses)
+# get the Q-Q plot
+std_residual <- rstandard(model)
+qqnorm(std_residual, main = "")
+qqline(std_residual)
+
+```
+
+Figure 3 shows a roughly homoscedastic distribution for residuals for each group. In sum, the inference of ANOVA should be valid.
+
+### Figure 3: Residual-fit plot across the three groups
+``` {r fit plot, fig.height = 6.4, fig.width= 9, echo = FALSE}
+
+par(mar = c(5.1, 4.1, 1, 2.1), cex=2)
+
+# get the Residual vs. fit plot
+plot(model$fitted.values, model$residuals,
+     xlab = "Fitted Values",
+     ylab = "Residuals")
+abline(0,0)
+
+```
+
+Table 3 shows the analysis of variance for reading scores as a function of socioeconomic status. We can reject the null hypothesis of equal means (p < .001) and conclude that reading score is associated with socioeconomic status. 
+
+### Table 3: ANOVA for reading scores as a function of SES
+
+``` {r ANOVA, echo = FALSE}
+
+# ANOVA
+aov.model <- aov(hsb2$read ~ hsb2$ses)
+anova <- summary(aov.model)
+anova <-  as.data.frame(do.call(cbind, anova))
+anova$`Sum Sq` <- round(anova$`Sum Sq`)
+anova$`Mean Sq` <- round(anova$`Mean Sq`,1)
+anova$`F value` <- round(anova$`F value`,3)
+anova$`Pr(>F)` <- round(anova$`Pr(>F)`,5)
+rownames(anova) <- c("SES","Residual")
+
+options(knitr.kable.NA = "")
+
+anova %>%
+  kable(longtable = T,
+        col.names = c("df",
+                      "SS",
+                      "MS",
+                      "F",
+                      "*p*"),
+        ) %>%
+    kable_styling(full_width = T) %>%
+  row_spec(0, color = "white", background = "#5462B6") %>%
+    row_spec(1:nrow(anova), color = "black")
+
+```
+
+\
+
+``` {r Tukey, echo = FALSE}
+
+# Run Tukey HSD for the model
+
+Tukey <- TukeyHSD(aov.model)
+
+# Rename the list for Tukey to make inline coding easier.
+
+names(Tukey) <- "confint"
+
+```
+
+Figure 4 illustrates Tukey pairwise comparisons for the three SES groups. We can state, with 95% confidence, that high SES students score higher for reading than either medium SES students (an average of between `r round(Tukey$confint[3,2])` and `r round(Tukey$confint[3,3])` points higher on the reading test) or low SES students (an average of between `r round(Tukey$confint[2,2])` and `r round(Tukey$confint[2,3])` points higher on the reading test) in the population represented by this sample. Although medium SES students score slightly higher on average in the sample than low SES students, this difference cannot be inferred to the population.
+
+\
+
+### Figure 4: Illustration of Tukey confidence intervals for the difference in mean reading score for each pair of SES groups
+
+``` {r Tukey plot, echo = FALSE}
+
+# Plot confidence intervals
+
+GGTukey(Tukey, "#7fffd4")
+
+```
+
+\
+
+``` {r bootstrap, echo=FALSE}
+
+### Low SES Bootstrap
+
+    # Initialize objects
+    mean_vector <- NULL
+    n <- length(low_SES$read)
+    
+    # Take multiple samples (with replacement) and construct sampling
+    # distribution of the mean
+    
+    for (i in 1:10000) {
+      the_sample <- sample(low_SES$read, n, replace = TRUE)
+      mean_vector <- c(mean_vector, mean(the_sample))
+    }
+    
+    # Sort the vector and cut off 2.5% on each end
+    mean_vector <- sort(mean_vector)
+    boot_int <- c(mean_vector[251], mean_vector[9750])
+
+### Medium SES Bootstrap
+
+    # Initialize objects
+    mean_vector2 <- NULL
+    n <- length(med_SES$read)
+    
+    # Take multiple samples (with replacement) and construct sampling
+    # distribution of the mean
+    
+    for (i in 1:10000) {
+      the_sample2 <- sample(med_SES$read, n, replace = TRUE)
+      mean_vector2 <- c(mean_vector2, mean(the_sample2))
+    }
+    
+    # Sort the vector and cut off 2.5% on each end
+    mean_vector2 <- sort(mean_vector2)
+    boot_int2 <- c(mean_vector2[251], mean_vector2[9750])
+
+### High SES Bootstrap
+
+    # Initialize objects
+    mean_vector3 <- NULL
+    n <- length(high_SES$read)
+    
+    # Take multiple samples (with replacement) and construct sampling
+    # distribution of the mean
+    
+    for (i in 1:10000) {
+      the_sample3 <- sample(high_SES$read, n, replace = TRUE)
+      mean_vector3 <- c(mean_vector3, mean(the_sample3))
+    }
+    
+    # Sort the vector and cut off 2.5% on each end
+    mean_vector3 <- sort(mean_vector3)
+    boot_int3 <- c(mean_vector3[251], mean_vector3[9750])
+    
+    
+# Function to find the bootstrap Confidence Intervals
+boot.confint <- boot.ci(boot.out = bootstrap,
+        type = c("norm", "basic",
+                 "perc", "bca"))
+
+```
+
+In addition to the ANOVA and post hoc testing, we decided to also conduct bootstrap analysis for the 95% confidence intervals to find the true population mean reading scores for each level of SES. This resulted in the following intervals, which align with the omnibus and post hoc findings above that high SES students score higher on reading tests on average than low or medium SES students:
+
+$$ Low SES : (45.7 \le μ \le 51)\\
+Medium SES : (49.7 \le μ \le 53.5)\\
+High SES : (53.7 \le μ \le 59.2)$$
+
+Bootstrapping can also be utilized to analyze the correlation between the predictor variable, SES, and the response variable, reading score. Below are the bootstrap statistics for the Spearman correlation as well as the distribution of reading scores by SES. T0 is 0.28 with a standard error of 0.068. The normal bootstrap 95% confidence interval for correlation is (0.148, 0.416), which tells us is that we can be 95% certain that the actual correlation between SES and reading score lies in this interval 95% of the time. Figure 5 illustrates the histogram of the bootstrap replicates with t0 indicated by the dotted vertical line and the normal Q-Q plot of the bootstrap replicates. This Q-Q plot is a little heavy on the lower tail unlike the Q-Q plot based on the sample that has a bit of light, ragged tails.
+
+\
+
+### Figure 5: Side-by-side figures of the histogram and normal Q-Q plot of bootstrap replicates
+
+``` {r bootstrap2, fig.height = 6.4, fig.width= 9, echo=FALSE}
+par(cex=2)
+
+plot(bootstrap)
+
+```
+
+## Conclusions
+We examined the relationship of SES to standardized reading test scores for high school seniors. Sample results suggest that reading test score variation differs among students in different SES groups, with high SES students having the highest mean score. Using analysis of variance, we can reject the null hypothesis of mean equality (*p* < .001) and conclude that there are differences in mean reading test score based on SES. Post hoc testing supported our hypothesis that high SES students will have the highest mean reading scores (an average of between `r round(Tukey$confint[3,2])` and `r round(Tukey$confint[3,3])` points higher on the reading test than medium SES students and an average of between `r round(Tukey$confint[2,2])` and `r round(Tukey$confint[2,3])` points higher on the reading test than low SES students) in the population represented by this sample. We also conducted bootstrap analysis for these hypotheses and came to the same conclusion that high SES students will score higher (an average score of 54 to 59) than medium SES or low SES students (a maximum average score of 54 and 51, respectively). Neither test indicated a difference between medium and low SES students that can be inferred to the population.
+
+\
+
+\
+
+***
+
+**Team FSKK, this is a well-executed and sophisticated project. Nice work!**
+
+**40/40**
